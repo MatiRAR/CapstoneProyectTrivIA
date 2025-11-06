@@ -1,55 +1,40 @@
-# CapstoneProyectTrivIA
+# 🤖 CapstoneProyectTriviA – Bot de Inteligencia Artificial (Telegram + Groq)
 
-# 🤖 DebateSensei — Telegram AI Debate Bot
-
-**DebateSensei** es un bot de Telegram impulsado por IA que ayuda a desarrollar pensamiento crítico y fomentar debates respetuosos.
-
-El usuario envía:
-- ✅ Texto
-- ✅ Imágenes (memes, noticias, frases, screenshots)
-
-El bot analiza el contenido, detecta la postura y genera un **contraargumento respetuoso**, promoviendo una conversación constructiva y reflexiva.
-
-> No busca ganar discusiones — busca ayudarte a pensar mejor.
+Este proyecto implementa un **bot de Telegram con inteligencia artificial**, desarrollado en **Python (POO)** e integrado con la **API de Groq**.  
+El bot puede analizar texto, imágenes y audio, mantener el contexto de conversación y realizar análisis de sentimiento.
 
 ---
 
-## 🎯 Objetivo
+## ⚙️ Instalación y configuración completa
 
-Promover el pensamiento crítico y la conversación sana usando IA para analizar ideas, detectar posturas y ofrecer puntos de vista alternativos.
-
----
-
-## ✨ Funcionalidades principales
-
-| Función | Descripción |
-|--------|-------------|
-🧠 NLP | Detección de postura, tema y tono |
-🖼️ OCR | Extrae texto desde imágenes (memes, noticias, carteles) |
-⚖️ Contraargumentos | Respuestas razonadas y respetuosas |
-🔍 Fact-check | Verificación rápida cuando aplica |
-💬 Preguntas reflexivas | Estimula pensamiento crítico |
-👍 Feedback | El usuario puede evaluar la respuesta |
-
----
-
-## 🧩 Flujo general
-
-## 📂 Estructura inicial del proyecto
-
+### 1️⃣ Clonar el repositorio
 ```bash
-DebateSensei/
-│── src/
-│   ├── bot.py
-│   ├── ocr_service.py
-│   ├── stt_service.py
-│   ├── text_processor.py
-│   ├── debate_engine.py
-│   ├── fact_checker.py
-│   ├── feedback.py
-│   └── utils.py
-│
-├── tests/
-│
-├── README.md
-└── requirements.txt
+git clone https://github.com/MatiRAR/CapstoneProyectTriviA.git
+cd CapstoneProyectTriviA/ai_telegram_groq
+
+# Instalar dependencias
+pip install -r requirements.txt
+
+
+# Configurar variables de entorno
+TELEGRAM_BOT_TOKEN=tu_token_de_telegram_aqui
+GROQ_API_KEY=tu_api_key_de_groq_aqui
+
+
+#  Ejecucion del bot 
+python bot.py
+
+
+# Si todo está correcto verás
+INFO - Bot OK: @Tribgo_bot (id=...)
+INFO - Iniciando polling… (si queda aquí, ya está escuchando)
+
+
+# Comandos disponibles
+| Comando     | Descripción                                                    |
+| ----------- | -------------------------------------------------------------- |
+| `/start`    | Muestra un mensaje de bienvenida y las categorías disponibles. |
+| `/ayuda`    | Explica las funciones y el uso del bot.                        |
+| `/pregunta` | Envía una pregunta aleatoria (o de una categoría específica).  |s
+| `/contexto` | Muestra la memoria reciente del chat.                          |
+| `/reset`    | Limpia la memoria de conversación.                             | 
