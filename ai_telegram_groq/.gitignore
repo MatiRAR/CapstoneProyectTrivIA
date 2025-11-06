@@ -1,0 +1,32 @@
+# Archivos y carpetas de entorno
+.env
+*.env
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+
+# Archivos de Python compilados
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Configuración local de VS Code y otros editores
+.vscode/
+.idea/
+
+# Archivos de dependencias y logs
+*.log
+*.sqlite3
+
+# Archivos temporales o del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de prueba o builds
+dist/
+build/
+*.egg-info/

@@ -1,0 +1,52 @@
+{
+  "version": "1.0.0",
+  "language": "es",
+  "topics": [
+    {
+      "id": "politica",
+      "preguntas": [
+        "¿Qué opinás sobre la importancia de la separación de poderes?",
+        "¿Qué indicadores usarías para evaluar la efectividad de una política pública?",
+        "¿Qué mecanismos de participación ciudadana te parecen más útiles?"
+      ]
+    },
+    {
+      "id": "economia",
+      "preguntas": [
+        "¿Cómo impacta la inflación en la planificación financiera familiar?",
+        "¿Qué políticas ayudan a fomentar las exportaciones de valor agregado?",
+        "¿Cómo afecta la tasa de interés al crédito para pymes?"
+      ]
+    },
+    {
+      "id": "estudio",
+      "preguntas": [
+        "¿Qué método de estudio te funciona mejor (pomodoro, mapas mentales, Feynman)?",
+        "¿Cómo definís objetivos semanales medibles para tus materias?",
+        "¿Qué hábitos aplicás para retener conceptos a largo plazo?"
+      ]
+    },
+    {
+      "id": "tecnologia",
+      "preguntas": [
+        "¿Qué criterios usás para evaluar si una herramienta de IA vale la pena?",
+        "¿Cómo definís un MVP tecnológico antes de escalar?",
+        "¿Qué métricas usarías para medir el éxito de una automatización?"
+      ]
+    },
+    {
+      "id": "cultura",
+      "preguntas": [
+        "¿Qué obra te influyó y por qué?",
+        "¿Cómo elegís contenido de calidad en medio de tanta oferta?"
+      ]
+    },
+    {
+      "id": "deportes",
+      "preguntas": [
+        "¿Qué deporte practicás y qué te aporta a nivel mental?",
+        "¿Cómo medís progreso sin obsesionarte con resultados?"
+      ]
+    }
+  ]
+}
