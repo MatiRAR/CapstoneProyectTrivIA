@@ -59,8 +59,55 @@ try:
 except Exception:
     tts_synthesize = None
 
+# ---- Moderación + Prompt central
+
+BANNED = ["insulto1", "insulto2"]
+MAX_CHARS = 2000
+
+def _is_allowed(text: str):
+    """True/False + mensaje de aviso si corresponde."""
+    t = (text or "").strip()
+    if not t:
+        return False, "No recibí contenido útil. ¿Podés reenviar tu idea?"
+    if any(b in t.lower() for b in BANNED):
+        return False, "Mantengamos un tono respetuoso 🙏. ¿Podés reformular?"
+    if len(t) > MAX_CHARS:
+        return False, f"Tu mensaje es muy largo ({len(t)}). ¿Podés resumirlo?"
+    return True, None
+
+DEBATE_SYSTEM = (
+    "Eres DebateSensei: un asistente conversacional breve, natural y respetuoso. "
+    "Da respuestas de 2 a 3 frases, sin listas, sin títulos ni negritas. "
+    "Usa humor ligero SOLO si el tema no es sensible; si el tema es serio, prioriza empatía y claridad. "
+    "Cierra con UNA única pregunta breve que invite a reflexionar, SOLO si corresponde "
+    "(si el tema es muy delicado o la respuesta ya incluye una pregunta del usuario, podés omitirla). "
+    "Si el usuario pide profundidad explícita, podés extenderte a 4–6 frases. "
+    "Siempre responde en español y en un único párrafo."
+)
+
+def build_user_prompt_from_text(user_text: str) -> str:
+    return (
+        "El usuario compartió una idea u opinión. "
+        "Respondé en 2–3 frases, tono natural, sin listas ni negritas. "
+        "Aporta un matiz o perspectiva alternativa sin confrontar. "
+        "Si el tema es liviano, humor leve es bienvenido; si es sensible o profundo, sé empático. "
+        "Cerrá con UNA sola pregunta breve que invite a pensar, solo si corresponde.\n\n"
+        f"Mensaje del usuario: {user_text}\n\n"
+        "Respuesta:"
+    )
+
+def build_user_prompt_from_image(description: str) -> str:
+    return (
+        "El usuario envió una imagen; abajo está su descripción. "
+        "Respondé en 2–3 frases, tono natural, sin listas ni negritas. "
+        "Comentá la idea que sugiere y sumá un matiz. "
+        "Cerrá con UNA sola pregunta breve que invite a pensar, solo si corresponde.\n\n"
+        f"Descripción de la imagen: {description}\n\n"
+        "Respuesta:"
+    )
+
 # ---- HELPERS GROQ ----
-async def groq_chat(prompt: str) -> str:
+async def groq_chat(prompt: str, system: str = DEBATE_SYSTEM) -> str:
     chat = await client.chat.completions.create(
         model=CFG["models"]["chat"],
         messages=[
@@ -70,6 +117,7 @@ async def groq_chat(prompt: str) -> str:
         max_completion_tokens=512
     )
     return chat.choices[0].message.content
+
 
 def _img_to_b64(pil_img: Image.Image, fmt="JPEG") -> str:
     buf = io.BytesIO()
