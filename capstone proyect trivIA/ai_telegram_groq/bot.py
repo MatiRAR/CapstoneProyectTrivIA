@@ -114,7 +114,9 @@ async def groq_chat(prompt: str, system: str = DEBATE_SYSTEM) -> str:
             {"role":"system","content":"Eres un asistente técnico, conciso y útil."},
             {"role":"user","content":prompt}
         ],
-        max_completion_tokens=512
+        max_completion_tokens=220,
+        temperature=0.4,
+        timeout=30
     )
     return chat.choices[0].message.content
 
