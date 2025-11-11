@@ -35,6 +35,6 @@ INFO - Iniciando polling… (si queda aquí, ya está escuchando)
 | ----------- | -------------------------------------------------------------- |
 | `/start`    | Muestra un mensaje de bienvenida y las categorías disponibles. |
 | `/ayuda`    | Explica las funciones y el uso del bot.                        |
-| `/pregunta` | Envía una pregunta aleatoria (o de una categoría específica).  |s
+| `/pregunta` | Envía una pregunta aleatoria (o de una categoría específica).  |
 | `/contexto` | Muestra la memoria reciente del chat.                          |
 | `/reset`    | Limpia la memoria de conversación.                             | 
