@@ -1,0 +1,130 @@
+{
+  "version": "2.0.0",
+  "language": "es",
+  "topics": [
+    {
+      "id": "politica",
+      "descripcion": "Instituciones, participación y políticas públicas",
+      "preguntas": [
+        {
+          "q": "¿Qué es la separación de poderes y para qué sirve?",
+          "a": "Es la división del Estado en Poder Ejecutivo, Legislativo y Judicial para distribuir funciones, establecer controles cruzados y evitar la concentración del poder.",
+          "keywords": ["ejecutivo", "legislativo", "judicial", "contrapesos", "independencia", "evitar abusos", "control"]
+        },
+        {
+          "q": "Nombra dos mecanismos de participación ciudadana y explica uno.",
+          "a": "Ejemplos: voto, iniciativa popular, referéndum, plebiscito, audiencias públicas, presupuestos participativos. Por ejemplo, el referéndum permite que la ciudadanía apruebe o rechace una norma.",
+          "keywords": ["voto", "iniciativa popular", "referéndum", "plebiscito", "audiencias públicas", "presupuesto participativo", "control ciudadano"]
+        },
+        {
+          "q": "¿Qué diferencia hay entre una política pública y una ley?",
+          "a": "La ley es una norma general obligatoria aprobada por el poder legislativo; una política pública es un conjunto de acciones coordinadas del Estado para resolver un problema, que puede apoyarse en leyes.",
+          "keywords": ["norma", "obligatoria", "legislativo", "acciones", "resolver problemas", "implementación", "diseño", "evaluación"]
+        },
+        {
+          "q": "¿Por qué es importante la transparencia estatal?",
+          "a": "Permite el control ciudadano, previene la corrupción, mejora la eficiencia y fortalece la confianza en las instituciones.",
+          "keywords": ["transparencia", "acceso a la información", "corrupción", "rendición de cuentas", "confianza", "eficiencia"]
+        },
+        {
+          "q": "Explica brevemente qué es el federalismo.",
+          "a": "Es una forma de organización en la que el poder se reparte entre un gobierno central y gobiernos subnacionales con autonomía constitucional.",
+          "keywords": ["federalismo", "autonomía", "competencias", "gobiernos locales", "constitución", "descentralización"]
+        }
+      ]
+    },
+    {
+      "id": "economia",
+      "descripcion": "Conceptos macro y micro, inflación, empleo y comercio",
+      "preguntas": [
+        {
+          "q": "¿Qué es la inflación y cómo afecta a los hogares?",
+          "a": "Es el aumento sostenido del nivel general de precios. Reduce el poder adquisitivo, dificulta el ahorro y vuelve inciertas las decisiones de consumo e inversión.",
+          "keywords": ["precios", "poder adquisitivo", "ahorro", "consumo", "incertidumbre", "ingresos", "costo de vida"]
+        },
+        {
+          "q": "Menciona dos políticas para reducir la inflación.",
+          "a": "Política monetaria contractiva (subir tasas, restringir emisión) y política fiscal responsable (ordenar gasto y déficit). También ayudan acuerdos de precios y competencia.",
+          "keywords": ["política monetaria", "tasas", "emisión", "política fiscal", "déficit", "gasto público", "competencia"]
+        },
+        {
+          "q": "¿Qué diferencia hay entre PBI nominal y real?",
+          "a": "El PBI nominal valora la producción a precios corrientes; el PBI real descuenta la inflación, permitiendo comparar volúmenes de producción a lo largo del tiempo.",
+          "keywords": ["pbi nominal", "pbi real", "precios corrientes", "inflación", "volumen", "deflactor"]
+        },
+        {
+          "q": "Define brevemente oferta y demanda.",
+          "a": "Demanda: cantidades que los consumidores están dispuestos a comprar a distintos precios. Oferta: cantidades que los productores están dispuestos a vender a distintos precios.",
+          "keywords": ["oferta", "demanda", "precio", "cantidades", "consumidores", "productores", "mercado", "equilibrio"]
+        },
+        {
+          "q": "¿Por qué es relevante el valor agregado en las exportaciones?",
+          "a": "Aumenta el ingreso por unidad exportada, impulsa empleo calificado y encadena sectores con más productividad e innovación.",
+          "keywords": ["valor agregado", "exportaciones", "productividad", "empleo", "innovación", "encadenamientos"]
+        }
+      ]
+    },
+    {
+      "id": "estudio",
+      "descripcion": "Hábitos, técnicas y organización del aprendizaje",
+      "preguntas": [
+        {
+          "q": "Propón un método de estudio para una materia técnica.",
+          "a": "Combina repaso espaciado (spaced repetition), práctica activa con ejercicios, y mapas conceptuales. Cierra cada sesión con un mini-resumen y dudas abiertas.",
+          "keywords": ["spaced repetition", "práctica activa", "ejercicios", "mapas conceptuales", "resumen", "metacognición", "dudas"]
+        },
+        {
+          "q": "¿Cómo definir objetivos semanales medibles?",
+          "a": "Usa metas SMART: específicas, medibles, alcanzables, relevantes y con tiempo. Ej.: “Resolver 20 problemas de álgebra antes del domingo y revisar errores”.",
+          "keywords": ["smart", "específico", "medible", "alcanzable", "relevante", "tiempo", "objetivos", "seguimiento"]
+        },
+        {
+          "q": "¿Qué estrategia seguir antes de un examen práctico?",
+          "a": "Simula el entorno del examen, cronometra, alterna ejercicios fáciles/difíciles, y revisa tu checklist de errores frecuentes.",
+          "keywords": ["simulación", "cronómetro", "práctica deliberada", "checklist", "errores", "autoevaluación"]
+        },
+        {
+          "q": "Da un tip para memorizar fórmulas.",
+          "a": "Crea tarjetas (flashcards) con uso espaciado y agrega ejemplos concretos de aplicación para darle significado.",
+          "keywords": ["flashcards", "repetición espaciada", "ejemplos", "significado", "memoria"]
+        },
+        {
+          "q": "¿Cómo organizar un proyecto en equipo?",
+          "a": "Define roles claros, un tablero de tareas (Kanban), reuniones cortas de seguimiento y criterios de entrega con fechas.",
+          "keywords": ["roles", "kanban", "tareas", "seguimiento", "entregables", "fechas", "equipo"]
+        }
+      ]
+    },
+    {
+      "id": "tecnologia",
+      "descripcion": "IA, software y buenas prácticas",
+      "preguntas": [
+        {
+          "q": "Define inteligencia artificial en una frase.",
+          "a": "Conjunto de técnicas que permiten a sistemas realizar tareas que requieren inteligencia humana, como razonamiento, aprendizaje y percepción.",
+          "keywords": ["IA", "técnicas", "razonamiento", "aprendizaje", "percepción", "tareas"]
+        },
+        {
+          "q": "¿Qué es el aprendizaje supervisado?",
+          "a": "Paradigma de ML donde el modelo aprende desde pares (entrada-salida) etiquetados para generalizar a nuevos datos.",
+          "keywords": ["supervisado", "etiquetas", "generalización", "modelo", "datos", "ml"]
+        },
+        {
+          "q": "Menciona una ventaja de refactorizar código.",
+          "a": "Mejora legibilidad, reduce deuda técnica y facilita pruebas y mantenimiento sin cambiar el comportamiento.",
+          "keywords": ["refactorizar", "legibilidad", "deuda técnica", "mantenibilidad", "pruebas"]
+        },
+        {
+          "q": "¿Qué diferencia hay entre ruta absoluta y relativa?",
+          "a": "La absoluta inicia en la raíz del sistema y no depende del directorio actual; la relativa se interpreta desde el directorio de trabajo.",
+          "keywords": ["ruta absoluta", "ruta relativa", "directorio", "sistema de archivos", "path"]
+        },
+        {
+          "q": "Nombra dos buenas prácticas para APIs.",
+          "a": "Usar versionado y manejo consistente de errores; documentar con OpenAPI; autenticar y limitar tasas.",
+          "keywords": ["api", "versionado", "errores", "openapi", "autenticación", "rate limit", "documentación"]
+        }
+      ]
+    }
+  ]
+}
