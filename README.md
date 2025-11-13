@@ -1,19 +1,32 @@
-# 🤖 CapstoneProyectTriviA – Bot de Inteligencia Artificial (Telegram + Groq)
+# 🤖 CapstoneProyectTrivIA — Telegram + Groq AI
 
-Este proyecto implementa un **bot de Telegram con inteligencia artificial**, desarrollado en **Python (POO)** e integrado con la **API de Groq**.  
-El bot puede analizar texto, imágenes y audio, mantener el contexto de conversación y realizar análisis de sentimiento.
+Proyecto desarrollado en **Python (POO)** que implementa un **bot inteligente de Telegram**, potenciado por la **API de Groq**, capaz de:
+
+- 💬 Mantener **memoria contextual** en las conversaciones.  
+- 🧠 Analizar **texto, imágenes y notas de voz**.  
+- 📘 Gestionar **preguntas desde un archivo JSON**, con autoevaluación y feedback.  
+- 🤓 Responder automáticamente cuando el usuario dice “no sé”.  
+- ⚔️ Activar un **Modo Debate lógico** que refuta ideas con razonamiento.  
+- 🤝 Proporcionar una experiencia fluida y segura con manejo de errores controlado (`@safe_handler`).
 
 ---
 
-## ⚙️ Instalación y configuración completa
+## ⚙️ Requisitos
+
+- Python **3.10 o superior**  
+- Token del bot de **Telegram**  
+- API Key de **Groq**  
+- Librerías definidas en `requirements.txt`
+
+---
+
+## 🧩 Instalación y Configuración
 
 ### 1️⃣ Clonar el repositorio
+
 ```bash
 git clone https://github.com/MatiRAR/CapstoneProyectTriviA.git
 cd CapstoneProyectTriviA/ai_telegram_groq
-
-# Instalar dependencias
-pip install -r requirements.txt
 
 
 # Configurar variables de entorno
@@ -31,10 +44,11 @@ INFO - Iniciando polling… (si queda aquí, ya está escuchando)
 
 
 # Comandos disponibles
-| Comando     | Descripción                                                    |
-| ----------- | -------------------------------------------------------------- |
-| `/start`    | Muestra un mensaje de bienvenida y las categorías disponibles. |
-| `/ayuda`    | Explica las funciones y el uso del bot.                        |
-| `/pregunta` | Envía una pregunta aleatoria (o de una categoría específica).  |
-| `/contexto` | Muestra la memoria reciente del chat.                          |
-| `/reset`    | Limpia la memoria de conversación.                             | 
+| Comando     | Descripción                                                            |
+| ----------- | ---------------------------------------------------------------------- |
+| `/start`    | Muestra un mensaje de bienvenida con las categorías disponibles.       |
+| `/ayuda`    | Explica las funciones y modos del bot.                                 |
+| `/pregunta` | Envía una pregunta aleatoria del JSON (o según la categoría indicada). |
+| `/contexto` | Muestra la memoria reciente de la conversación.                        |
+| `/reset`    | Limpia toda la memoria del chat.                                       |
+| `/debate`   | Alterna el modo debate (ON/OFF): refuta ideas con lógica y argumentos. |
