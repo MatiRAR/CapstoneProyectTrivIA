@@ -1,6 +1,3 @@
-# bot.py — Bot general + debate + recordatorios reales + gastos + explicador de texto
-# Responde SIEMPRE en ESPAÑOL
-
 import os
 import json
 import platform
@@ -60,12 +57,23 @@ def safe_handler(fn):
 
 
 class TelegramGroqBot:
-    """Bot general con memoria, modo debate y mini-módulos:
+    """Bot general con:
+    - Memoria corta de conversación
+    - Modo debate (/debate)
     - Recordatorios reales (/recordar)
-    - Gastos (/gasto, /gastos)
+    - Gastos (/gasto, /gastos) con flujo guiado
     - Explicador de texto (/doc)
-    - Preguntas por categoría (/pregunta <categoría>)
+    - Preguntas por categoría (/pregunta <categoría>) con:
+        - detección de “no sé”
+        - retroalimentación sin puntaje
     """
+
+    # saludos que disparan el panel (sin llamar a Groq)
+    SALUDOS = {
+        "hola", "holaa", "holis",
+        "buenas", "buen día", "buen dia",
+        "hello", "hi"
+    }
 
     def __init__(self, base: Path):
         self.base = base
@@ -89,7 +97,7 @@ class TelegramGroqBot:
         # ---- Cliente Groq ----
         self.client = AsyncGroq(api_key=self.groq_key) if (USE_GROQ and self.groq_key) else None
         if not self.client:
-            log.warning("Groq no configurado: las respuestas serán limitadas.")
+            log.warning("Groq no configurado: las respuestas serán más limitadas.")
 
         self.model_chat = "llama-3.3-70b-versatile"
 
@@ -101,12 +109,31 @@ class TelegramGroqBot:
         self.reminders: dict[int, list[tuple[datetime, str]]] = defaultdict(list)   # (datetime, texto)
         self.expenses: dict[int, list[tuple[float, str]]] = defaultdict(list)       # (monto, categoría)
 
-        # Estado de diálogo para /recordar (por chat)
-        # ej: { chat_id: {"step": "waiting_text"/"waiting_time", "text": "..." } }
-        self.reminder_state: dict[int, dict] = {}
+        # Estado de diálogo para recordatorios y gastos
+        self.reminder_state: dict[int, dict] = {}   # {chat_id: {"step": ..., "text": ...}}
+        self.expense_state: dict[int, dict] = {}    # {chat_id: {"step": ..., "amount": ...}}
+
+        # Última pregunta enviada por /pregunta (para evaluación)
+        # { chat_id: {"q": str, "a": str | None} }
+        self.last_q: dict[int, dict] = {}
+
+        # Stopwords mínimas para español (para evaluación simple)
+        self.stop_es = {
+            "el", "la", "los", "las", "un", "una", "unos", "unas",
+            "de", "del", "al", "y", "o", "u", "es", "son",
+            "en", "por", "para", "con", "sin", "a", "que", "se", "lo",
+            "su", "sus", "mi", "mis", "tu", "tus",
+            "yo", "vos", "usted", "ustedes", "él", "ella", "ellos", "ellas",
+            "nosotros", "nosotras", "me", "te", "le", "les", "nos",
+            "como", "sobre", "entre", "hasta", "desde", "ya", "muy",
+            "mas", "más", "si", "sí", "no", "tambien", "también",
+            "pero", "porque", "qué", "que"
+        }
 
     # ---------- UTILIDADES BÁSICAS ----------
+
     async def _action(self, update: Update, action: ChatAction):
+        """Envía 'typing…', etc. sin romper si falla."""
         try:
             if update and update.message:
                 await update.message.chat.send_action(action)
@@ -117,94 +144,151 @@ class TelegramGroqBot:
         self.history[cid].append({"role": role, "content": content})
 
     # ---------- PREGUNTAS JSON ----------
+
     def _all_categories(self) -> list[str]:
         try:
             return [t["id"] for t in self.preg.get("topics", []) if "id" in t]
         except Exception:
             return []
 
-    def _pick_question(self, category: str | None):
-        cats: dict[str, list[str]] = {}
+    def _topics_str(self) -> str:
+        cats = self._all_categories()
+        return ", ".join(cats) if cats else "—"
+
+    def _pick_question_with_answer(self, category: str | None):
+        """
+        Devuelve (categoria_elegida, pregunta, respuesta_correcta | None).
+        Soporta items como:
+          - "pregunta simple"
+          - {"q": "pregunta", "a": "respuesta"}
+        """
+        cats: dict[str, list[tuple[str, str | None]]] = {}
+
         for topic in self.preg.get("topics", []):
             tid = topic.get("id")
             qs = topic.get("preguntas", [])
             if not tid:
                 continue
-            preguntas_cat = []
+
+            preguntas_cat: list[tuple[str, str | None]] = []
             for item in qs:
                 if isinstance(item, str):
-                    preguntas_cat.append(item)
-                elif isinstance(item, dict) and "q" in item:
-                    preguntas_cat.append(item["q"])
+                    preguntas_cat.append((item, None))
+                elif isinstance(item, dict):
+                    q = item.get("q")
+                    a = item.get("a")
+                    if q:
+                        preguntas_cat.append((q, a))
+
             if preguntas_cat:
                 cats[tid] = preguntas_cat
 
         if not cats:
-            return None, None
+            return None, None, None
 
         if not category or category not in cats:
             category = random.choice(list(cats.keys()))
+
         qs_cat = cats.get(category, [])
-        return category, (random.choice(qs_cat) if qs_cat else None)
+        if not qs_cat:
+            return category, None, None
 
-    def _topics_str(self) -> str:
-        cats = self._all_categories()
-        return ", ".join(cats) if cats else "—"
+        q, a = random.choice(qs_cat)
+        return category, q, a
 
-    # ---------- GROQ ----------
-    async def groq_chat(self, cid: int, text: str) -> str:
-        """Chat normal: SIEMPRE en español."""
+    # ---------- HELPER GROQ ÚNICO ----------
+
+    async def _groq_complete(self, system_prompt: str, user_content: str, fallback: str) -> str:
+        """Helper centralizado para llamar a Groq."""
         if not self.client:
-            return "🤖 (modo local) Sin conexión a Groq. Puedo ayudarte con /recordar, /gasto, /gastos, /doc o /pregunta."
+            return fallback
 
         chat = await self.client.chat.completions.create(
             model=self.model_chat,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Eres un asistente útil que responde SIEMPRE en español. "
-                        "Sé claro, concreto y amable. No uses inglés a menos que el usuario lo pida explícitamente."
-                    ),
-                },
-                {"role": "user", "content": text},
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
             ],
             max_completion_tokens=512,
             temperature=0.4,
         )
-        reply = chat.choices[0].message.content
+        return chat.choices[0].message.content
+
+    # ---------- GROQ: CHAT Y DEBATE ----------
+
+    async def groq_chat(self, cid: int, text: str) -> str:
+        """Chat normal: SIEMPRE en español."""
+        system_prompt = (
+            "Eres un asistente útil que responde SIEMPRE en español. "
+            "Sé claro, concreto y amable. No uses inglés a menos que el usuario lo pida explícitamente."
+        )
+        fallback = (
+            "🤖 (modo local) Sin conexión a Groq. "
+            "Puedo ayudarte con /recordar, /gasto, /gastos, /doc o /pregunta."
+        )
+        reply = await self._groq_complete(system_prompt, text, fallback)
         self._remember(cid, "user", text)
         self._remember(cid, "assistant", reply)
         return reply
 
     async def groq_debate(self, cid: int, text: str) -> str:
         """Modo debate: refuta en español."""
-        if not self.client:
-            return "🧩 (modo local) El modo debate requiere GROQ_API_KEY configurada."
-
-        chat = await self.client.chat.completions.create(
-            model=self.model_chat,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Actúas como un crítico lógico en ESPAÑOL. "
-                        "Tu tarea es analizar y refutar de forma respetuosa la afirmación del usuario. "
-                        "Detecta posibles falacias, pide evidencia, ofrece contraejemplos y termina con una síntesis breve. "
-                        "Nunca respondas en inglés salvo que el usuario lo pida explícitamente."
-                    ),
-                },
-                {"role": "user", "content": text},
-            ],
-            max_completion_tokens=512,
-            temperature=0.25,
+        system_prompt = (
+            "Actúas como un crítico lógico en ESPAÑOL. "
+            "Tu tarea es analizar y refutar de forma respetuosa la afirmación del usuario. "
+            "Detecta posibles falacias, pide evidencia, ofrece contraejemplos y termina con una síntesis breve. "
+            "Nunca respondas en inglés salvo que el usuario lo pida explícitamente."
         )
-        reply = chat.choices[0].message.content
+        fallback = "🧩 (modo local) El modo debate requiere GROQ_API_KEY configurada."
+        reply = await self._groq_complete(system_prompt, text, fallback)
         self._remember(cid, "user", text)
         self._remember(cid, "assistant", reply)
         return reply
 
+    # ---------- EVALUACIÓN SIN PUNTAJE ----------
+
+    def evaluar_respuesta_simple(self, user_answer: str, correct_answer: str) -> str:
+        """Evalúa la respuesta del usuario SIN puntaje (solo análisis cualitativo)."""
+        u = user_answer.lower()
+        c = correct_answer.lower()
+
+        # Palabras clave importantes de la respuesta correcta
+        claves = [w for w in re.findall(r"\w+", c) if w not in self.stop_es and len(w) > 4]
+
+        if not claves:
+            # Si no hay claves, devolvemos algo neutro
+            return (
+                "Tu respuesta está relacionada, pero esta es la referencia que se esperaba:\n\n"
+                + correct_answer
+            )
+
+        coincidencias = sum(1 for w in claves if w in u)
+
+        if coincidencias == 0:
+            return (
+                "Tu respuesta no coincide con los puntos clave esperados.\n\n"
+                "Respuesta orientativa:\n" + correct_answer
+            )
+
+        if coincidencias <= len(claves) // 3:
+            return (
+                "Mencionaste algo relacionado, pero faltan varias ideas importantes.\n\n"
+                "Respuesta sugerida:\n" + correct_answer
+            )
+
+        if coincidencias <= len(claves) // 2:
+            return (
+                "Vas en buen camino, tomaste parte del contenido, pero aún faltan detalles claves.\n\n"
+                "Respuesta modelo:\n" + correct_answer
+            )
+
+        return (
+            "Bien, tu respuesta menciona los conceptos más importantes de forma aceptable. 👍\n\n"
+            "Referencia esperada (por si querés compararla):\n" + correct_answer
+        )
+
     # ---------- PANEL /START ----------
+
     async def _panel_html(self, update: Update):
         """Panel con listado de comandos (formato HTML)."""
         topics_str = self._topics_str()
@@ -229,6 +313,7 @@ class TelegramGroqBot:
         await update.message.reply_text(msg, parse_mode="HTML")
 
     # ---------- PARSER DE FECHA/HORA PARA RECORDATORIOS ----------
+
     def _parse_reminder_time(self, text: str) -> tuple[datetime | None, str | None]:
         """
         Acepta formas simples:
@@ -276,8 +361,14 @@ class TelegramGroqBot:
 
         return None, "Formato no reconocido. Usá por ejemplo: '20:30', 'hoy 21:00' o 'mañana 09:15'."
 
-    async def _schedule_reminder(self, cid: int, texto: str, when_dt: datetime,
-                                 update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def _schedule_reminder(
+        self,
+        cid: int,
+        texto: str,
+        when_dt: datetime,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+    ):
         """Programa un recordatorio real usando asyncio."""
         now = datetime.now()
         delay = max(0, (when_dt - now).total_seconds())
@@ -301,7 +392,21 @@ class TelegramGroqBot:
 
         context.application.create_task(task())
 
-    # ---------- HANDLERS ----------
+    # ---------- PARSER DE MONTOS PARA GASTOS ----------
+
+    def _parse_amount(self, text: str) -> tuple[float | None, str | None]:
+        """Convierte un texto a float, devolviendo error amigable si falla."""
+        t = text.replace(",", ".").strip()
+        try:
+            value = float(t)
+            if value < 0:
+                return None, "El monto no puede ser negativo."
+            return value, None
+        except ValueError:
+            return None, "El monto debe ser un número. Ej: 1500 o 1500.50."
+
+    # ---------- HANDLERS COMANDOS ----------
+
     @safe_handler
     async def h_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await self._panel_html(update)
@@ -316,7 +421,8 @@ class TelegramGroqBot:
             "🧹 `/reset` — limpia memoria, recordatorios y gastos.\n"
             "📚 `/contexto` — muestra el historial reciente.\n\n"
             "⏰ `/recordar` — inicia un diálogo para crear un recordatorio real.\n"
-            "💸 `/gasto <monto> <categoría>` — registra un gasto (ej: `/gasto 1200 comida`).\n"
+            "💸 `/gasto` — diálogo guiado para registrar un gasto.\n"
+            "💸 `/gasto <monto> <categoría>` — registro rápido (ej: `/gasto 1200 comida`).\n"
             "💰 `/gastos` — muestra el listado y total de gastos.\n"
             "📄 `/doc <texto>` — explica un texto difícil en lenguaje sencillo.\n"
             f"❓ `/pregunta <categoría>` — muestra una pregunta del JSON. Categorías: {topics_str}\n",
@@ -325,14 +431,28 @@ class TelegramGroqBot:
 
     @safe_handler
     async def h_pregunta(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Devuelve una pregunta del JSON según categoría."""
+        """Devuelve una pregunta del JSON según categoría y prepara evaluación."""
+        cid = update.effective_chat.id
         args = context.args or []
-        cat = args[0].strip().lower() if args else None
-        sel_cat, q = self._pick_question(cat)
+        cat_arg = args[0].strip().lower() if args else None
+
+        sel_cat, q, a = self._pick_question_with_answer(cat_arg)
         if not q:
             await update.message.reply_text("No encontré preguntas. Revisá preguntas.json.")
             return
-        await update.message.reply_text(f"🗂️ Categoría: {sel_cat}\n💬 {q}")
+
+        # Guardamos la última pregunta y su respuesta (si existe)
+        self.last_q[cid] = {"q": q, "a": a}
+
+        msg = f"🗂️ Categoría: {sel_cat}\n❓ {q}"
+        if a:
+            msg += (
+                "\n\nCuando respondas, te doy una devolución. "
+                "Si no sabés, podés escribir *no sé*."
+            )
+            await update.message.reply_text(msg, parse_mode="Markdown")
+        else:
+            await update.message.reply_text(msg)
 
     @safe_handler
     async def h_contexto(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -357,6 +477,8 @@ class TelegramGroqBot:
         self.reminders.pop(cid, None)
         self.expenses.pop(cid, None)
         self.reminder_state.pop(cid, None)
+        self.expense_state.pop(cid, None)
+        self.last_q.pop(cid, None)
         await update.message.reply_text("🧹 Memoria borrada. Te vuelvo a mostrar los comandos disponibles:")
         await self._panel_html(update)
 
@@ -369,6 +491,7 @@ class TelegramGroqBot:
         await update.message.reply_text(f"{emoji} Modo debate: {st}")
 
     # ----- Recordatorios (modo diálogo) -----
+
     @safe_handler
     async def h_recordar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Inicia o acelera el flujo de creación de recordatorios."""
@@ -392,29 +515,37 @@ class TelegramGroqBot:
             "Ejemplo: `estudiar para el parcial`, `llevar documentos`"
         )
 
-    # ----- Gastos -----
+    # ----- Gastos (modo diálogo + modo rápido) -----
+
     @safe_handler
     async def h_gasto(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Registra un gasto: rápido o guiado."""
         cid = update.effective_chat.id
         rest = update.message.text.replace("/gasto", "", 1).strip()
-        parts = rest.split()
-        if len(parts) < 2:
-            await update.message.reply_text(
-                "💸 Uso: `/gasto <monto> <categoría>`\nEj: `/gasto 1200 comida`",
-                parse_mode="Markdown",
-            )
-            return
-        try:
-            monto = float(parts[0].replace(",", "."))
-        except ValueError:
-            await update.message.reply_text(
-                "💸 El monto debe ser un número. Ej: `1500` o `1500.50`.",
-                parse_mode="Markdown",
-            )
-            return
-        categoria = " ".join(parts[1:])
-        self.expenses[cid].append((monto, categoria))
-        await update.message.reply_text(f"💰 Gasto registrado: {monto} — {categoria}")
+
+        # MODO RÁPIDO: /gasto 1200 comida
+        if rest:
+            parts = rest.split()
+            if len(parts) >= 2:
+                amount_str = parts[0]
+                amount, err = self._parse_amount(amount_str)
+                if err:
+                    await update.message.reply_text(
+                        f"💸 {err}\nEjemplo: `/gasto 1200 comida`",
+                        parse_mode="Markdown",
+                    )
+                    return
+                categoria = " ".join(parts[1:])
+                self.expenses[cid].append((amount, categoria))
+                await update.message.reply_text(f"💰 Gasto registrado: {amount} — {categoria}")
+                return
+
+        # MODO GUIADO: /gasto solo
+        self.expense_state[cid] = {"step": "waiting_amount"}
+        await update.message.reply_text(
+            "💸 ¿Cuánto gastaste?\n"
+            "Ejemplos: `1200`, `1500.50`"
+        )
 
     @safe_handler
     async def h_gastos(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -432,6 +563,7 @@ class TelegramGroqBot:
         )
 
     # ----- Explicador de texto (/doc) -----
+
     @safe_handler
     async def h_doc(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         cid = update.effective_chat.id
@@ -445,31 +577,20 @@ class TelegramGroqBot:
             return
 
         await self._action(update, ChatAction.TYPING)
-        if not self.client:
-            await update.message.reply_text("📄 (modo local) Sin Groq, no puedo explicar el documento.")
-            return
 
-        chat = await self.client.chat.completions.create(
-            model=self.model_chat,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Explica el siguiente texto legal/técnico en ESPAÑOL sencillo. "
-                        "Usa viñetas si hace falta y resalta los puntos importantes."
-                    ),
-                },
-                {"role": "user", "content": texto},
-            ],
-            max_completion_tokens=512,
-            temperature=0.3,
+        system_prompt = (
+            "Explica el siguiente texto legal/técnico en ESPAÑOL sencillo. "
+            "Usa viñetas si hace falta y resalta los puntos importantes."
         )
-        reply = chat.choices[0].message.content
+        fallback = "📄 (modo local) Sin Groq, no puedo explicar el documento."
+        reply = await self._groq_complete(system_prompt, texto, fallback)
+
         self._remember(cid, "user", texto)
         self._remember(cid, "assistant", reply)
         await update.message.reply_text(f"📄 {reply}")
 
     # ----- Texto normal (sin comando) -----
+
     @safe_handler
     async def h_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         cid = update.effective_chat.id
@@ -502,14 +623,75 @@ class TelegramGroqBot:
                 await self._schedule_reminder(cid, texto, when_dt, update, context)
                 return
 
-        # 2) Saludos → muestran panel y NO llaman al modelo
+        # 2) Flujo de gastos en curso
+        if cid in self.expense_state:
+            state = self.expense_state[cid]
+            step = state.get("step")
+
+            if step == "waiting_amount":
+                amount, err = self._parse_amount(text)
+                if err:
+                    await update.message.reply_text(
+                        f"💸 {err}\nEjemplos: `1200`, `1500.50`"
+                    )
+                    return
+                state["amount"] = amount
+                state["step"] = "waiting_category"
+                self.expense_state[cid] = state
+                await update.message.reply_text(
+                    "📂 ¿En qué categoría fue el gasto?\n"
+                    "Ejemplos: `comida`, `transporte`, `salud`"
+                )
+                return
+
+            if step == "waiting_category":
+                amount = state.get("amount", 0.0)
+                categoria = text or "sin categoría"
+                self.expenses[cid].append((amount, categoria))
+                self.expense_state.pop(cid, None)
+                await update.message.reply_text(f"💰 Gasto registrado: {amount} — {categoria}")
+                return
+
+        # 3) Evaluación de respuesta a /pregunta (incluye “no sé”)
+        if cid in self.last_q:
+            info = self.last_q[cid]
+            correct_answer = info.get("a")
+            user_answer = text
+
+            # Normalizamos "no sé"
+            normalized = user_answer.lower().strip()
+            normalized = normalized.replace("é", "e")
+            if normalized in {"no se", "nose"}:
+                if correct_answer:
+                    await update.message.reply_text(
+                        "No hay problema, la respuesta orientativa es:\n\n" + correct_answer
+                    )
+                else:
+                    await update.message.reply_text(
+                        "Para esta pregunta no tengo una respuesta modelo guardada en el JSON."
+                    )
+                self.last_q.pop(cid, None)
+                return
+
+            if correct_answer:
+                feedback = self.evaluar_respuesta_simple(user_answer, correct_answer)
+                await update.message.reply_text(feedback)
+            else:
+                await update.message.reply_text(
+                    "Tomé tu respuesta, pero para esta pregunta no tengo una respuesta modelo en el JSON."
+                )
+
+            # Después de evaluar, limpiamos la última pregunta
+            self.last_q.pop(cid, None)
+            return
+
+        # 4) Saludos → muestran panel y NO llaman al modelo
         lower = text.lower()
-        saludos = {"hola", "holaa", "holis", "buenas", "buen día", "buen dia", "hello", "hi"}
-        if lower in saludos:
+        if lower in self.SALUDOS:
             await self._panel_html(update)
             return
 
-        # 3) Conversación normal / modo debate
+        # 5) Conversación normal / modo debate
         await self._action(update, ChatAction.TYPING)
 
         if self.debate_mode.get(cid, False):
@@ -522,6 +704,7 @@ class TelegramGroqBot:
         await update.message.reply_text(f"{emoji} {reply}")
 
     # ---------- ARRANQUE ----------
+
     def _check_token(self):
         r = requests.get(f"https://api.telegram.org/bot{self.tg_token}/getMe", timeout=10)
         r.raise_for_status()
