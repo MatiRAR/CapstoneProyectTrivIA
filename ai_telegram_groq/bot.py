@@ -6,6 +6,7 @@ import logging
 import requests
 import random
 import re
+import base64
 from datetime import datetime, timedelta
 from pathlib import Path
 from collections import defaultdict, deque
@@ -63,9 +64,8 @@ class TelegramGroqBot:
     - Recordatorios reales (/recordar)
     - Gastos (/gasto, /gastos) con flujo guiado
     - Explicador de texto (/doc)
-    - Preguntas por categoría (/pregunta <categoría>) con:
-        - detección de “no sé”
-        - retroalimentación sin puntaje
+    - Preguntas por categoría (/pregunta <categoría>)
+    - SOPORTE DE AUDIO: notas de voz / audios → transcripción + respuesta
     """
 
     # saludos que disparan el panel (sin llamar a Groq)
@@ -302,13 +302,13 @@ class TelegramGroqBot:
             "• /debate — Activar/desactivar refutación lógica\n\n"
             "🗓️ <b>Organización personal:</b>\n"
             "• /recordar — Crear un recordatorio guiado\n"
-            "• /gasto &lt;monto&gt; &lt;categoría&gt; — Registrar un gasto\n"
+            "• /gasto &lt;monto&gt; &lt;categoría&gt; — Registrar un gasto rápido\n"
             "• /gastos — Ver el resumen de gastos del chat\n"
             "• /doc &lt;texto&gt; — Explicar un texto en lenguaje sencillo\n\n"
             f"❓ <b>Preguntas por categoría:</b>\n"
             f"• /pregunta &lt;categoría&gt; — Ej: /pregunta estudio\n"
             f"   Categorías disponibles: {topics_str}\n\n"
-            "💡 Usá <b>/debate</b> para cambiar entre modo normal y modo debate."
+            "🎙️ También podés mandarme notas de voz: las transcribo y te contesto."
         )
         await update.message.reply_text(msg, parse_mode="HTML")
 
@@ -425,7 +425,8 @@ class TelegramGroqBot:
             "💸 `/gasto <monto> <categoría>` — registro rápido (ej: `/gasto 1200 comida`).\n"
             "💰 `/gastos` — muestra el listado y total de gastos.\n"
             "📄 `/doc <texto>` — explica un texto difícil en lenguaje sencillo.\n"
-            f"❓ `/pregunta <categoría>` — muestra una pregunta del JSON. Categorías: {topics_str}\n",
+            f"❓ `/pregunta <categoría>` — muestra una pregunta del JSON. Categorías: {topics_str}\n"
+            "🎙️ También podés mandarme notas de voz: las transcribo y te contesto.",
             parse_mode="Markdown",
         )
 
@@ -589,6 +590,139 @@ class TelegramGroqBot:
         self._remember(cid, "assistant", reply)
         await update.message.reply_text(f"📄 {reply}")
 
+    # ----- AUDIO / NOTAS DE VOZ -----
+
+    @safe_handler
+    async def h_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Recibe audios/notas de voz, los transcribe con Groq y responde."""
+        cid = update.effective_chat.id
+
+        voice = update.message.voice or update.message.audio
+        if not voice:
+            return
+
+        await self._action(update, ChatAction.TYPING)
+
+        # 1) Descargar el archivo de Telegram
+        file = await context.bot.get_file(voice.file_id)
+
+        tmp_dir = self.base / "tmp"
+        tmp_dir.mkdir(exist_ok=True)
+
+        file_path = tmp_dir / f"audio_{cid}_{update.message.message_id}.ogg"
+        await file.download_to_drive(custom_path=str(file_path))
+
+        # 2) Sin Groq → solo avisamos
+        if not self.client:
+            await update.message.reply_text(
+                "🎙️ Recibí tu audio, pero no tengo GROQ_API_KEY para transcribirlo."
+            )
+            return
+
+        # 3) Transcribir con Whisper de Groq
+        try:
+            with open(file_path, "rb") as f:
+                tr = await self.client.audio.transcriptions.create(
+                    model="whisper-large-v3-turbo",
+                    file=f,
+                    response_format="text",
+                    language="es",
+                )
+        except Exception:
+            log.exception("Error transcribiendo audio")
+            await update.message.reply_text("⚠️ No pude transcribir el audio, probá de nuevo.")
+            return
+        finally:
+            try:
+                file_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        transcript = getattr(tr, "text", tr)
+        transcript = (transcript or "").strip()
+
+        if not transcript:
+            await update.message.reply_text("No pude entender el audio 😕.")
+            return
+
+        # 4) Usar la transcripción como mensaje normal
+        if self.debate_mode.get(cid, False):
+            reply = await self.groq_debate(cid, transcript)
+            emoji = "🧠"
+        else:
+            reply = await self.groq_chat(cid, transcript)
+            emoji = "💬"
+
+        await update.message.reply_text(
+            f"🎙️ <b>Transcripción:</b> {transcript}\n\n{emoji} {reply}",
+            parse_mode="HTML",
+        )
+
+    # ----- IMÁGENES / FOTOS -----
+
+    @safe_handler
+    async def h_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Recibe una foto, la manda a Groq visión y devuelve análisis en español."""
+        cid = update.effective_chat.id
+
+        await self._action(update, ChatAction.TYPING)
+
+        photo = update.message.photo[-1]  # mejor resolución
+        file = await photo.get_file()
+        img_bytes = await file.download_as_bytearray()
+
+        if not self.client:
+            await update.message.reply_text(
+                "🖼️ Recibí tu imagen, pero no tengo GROQ_API_KEY configurada para analizarla."
+            )
+            return
+
+        # Convertimos a base64 para enviar al modelo multimodal
+        b64 = base64.b64encode(img_bytes).decode("utf-8")
+
+        try:
+            r = await self.client.chat.completions.create(
+                model=self.model_chat,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": (
+                                    "Analizá esta imagen en ESPAÑOL.\n"
+                                    "- Explicá qué se ve.\n"
+                                    "- Mencioná detalles importantes.\n"
+                                    "- Si hay texto, intentá leerlo.\n"
+                                    "- Si es un documento, resumí su contenido.\n"
+                                    "- Si es una escena, describí el contexto."
+                                ),
+                            },
+                            {
+                                "type": "input_image",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{b64}"
+                                },
+                            },
+                        ],
+                    }
+                ],
+                max_completion_tokens=500,
+                temperature=0.3,
+            )
+
+            texto = r.choices[0].message.content.strip()
+            await update.message.reply_text(
+                f"🖼️ <b>Análisis de la imagen:</b>\n\n{texto}",
+                parse_mode="HTML",
+            )
+
+        except Exception:
+            log.exception("Error analizando imagen")
+            await update.message.reply_text(
+                "⚠️ No pude analizar la imagen. Revisá que sea una foto estándar (JPG/PNG) e intentá de nuevo."
+            )
+
     # ----- Texto normal (sin comando) -----
 
     @safe_handler
@@ -729,6 +863,16 @@ class TelegramGroqBot:
         app.add_handler(CommandHandler("gasto", self.h_gasto))
         app.add_handler(CommandHandler("gastos", self.h_gastos))
         app.add_handler(CommandHandler("doc", self.h_doc))
+
+        # audios / notas de voz
+        app.add_handler(
+            MessageHandler((filters.VOICE | filters.AUDIO) & ~filters.COMMAND, self.h_voice)
+        )
+
+        # fotos / imágenes
+        app.add_handler(
+            MessageHandler(filters.PHOTO & ~filters.COMMAND, self.h_photo)
+        )
 
         # texto normal
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.h_text))
